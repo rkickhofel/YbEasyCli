@@ -21,6 +21,7 @@
 #   Run from the manager node as ybdadmin user.
 #
 # Revision History:
+# . 2026.08.24 15:15 (rek) - Added get_col_encryption_status()
 # . 2026.08.18 19:00 (rek) - Added get_ca_cert_expiry()
 #                            Fixed db_char_cols.sh 'char_cols/*: No such file' error 
 # . 2026.07.23 11:00 (rek) - Multiple minor bug fixes in functions: die(), emit()
@@ -477,6 +478,39 @@ function get_encryption_status()
 }
 
 
+function get_col_encryption_status()
+#------------------------------------------------------------------------------
+{ 
+  local _count=0
+  local _count_sql=""
+  local _details_outfile=col_encr_key_details.out
+  local _detail_sql="SELECT current_database() AS database_name, * FROM sys.key"
+  local _detail_headers_sql="SELECT 'database_name', 'key_id', 'name', 'schema_id', 'owner_id', 'creation_time'"
+  local _dbs=$(${ybsql_qat} -d yellowbrick -c "SELECT name FROM sys.database ORDER BY name")
+
+  echo -n "" > ${_details_outfile}
+  ${ybsql_qat} -d yellowbrick -c "${_headers_sql}" >> ${_outfile}
+
+  print_property 'col_encr_key_by_db' '(running) '
+  print_property_append "(${_details_outfile})"
+
+  for _db in ${_dbs}
+  do
+    print_property_append '.'
+    _count_sql="SELECT COUNT(*) + ${_count} FROM sys.key"
+    _count=$(${ybsql_qat} -d "${_db}" -c "${_count_sql}")
+    
+    ${ybsql_qat} -d "${_db}" -c "${_detail_sql}" >> ${_details_outfile}  
+  done
+
+  if [[ ${_count} == "0" ]]; then
+      print_property 'col_encryption_in_use' 'Not in use.'
+  else  
+      print_property 'col_encryption_in_use' "IN USE (${_count})."
+  fi
+}
+
+
 function get_phonehome_status()
 #------------------------------------------------------------------------------
 {
@@ -711,7 +745,7 @@ SELECT db_name
 FROM udfs
 GROUP BY db_name;
 "
-  local readonly _func_sql_headers="SELECT 'db_name' AS db_name, 'c' AS c, 'ybcpp' AS ybcpp, 'sql' AS sql , 'plpgsql' AS plpgsql;"
+  local readonly _func_sql_headers="SELECT 'db_name', 'c', 'ybcpp', 'sql', 'plpgsql'"
 
   echo -n "" > ${_outfile}
   echo -n "" > ${_details_outfile}
@@ -1031,6 +1065,7 @@ function main()
   get_kerberos_status
   get_protegrity_status
   get_encryption_status
+  get_col_encryption_status
   get_phonehome_status
   get_heartbeat_status
   
