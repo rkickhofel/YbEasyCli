@@ -3,6 +3,7 @@
 # Functions:
 # . show_yb_env()
 # . do_connect()
+# . connect_with_info()
 # . is_appliance()
 # . is_manager()
 # . is_mgr_connection()
@@ -14,6 +15,10 @@
 # . get_yb_ver_num()
 #
 # Revision History:
+# 2026.08.31 - Multiple edits for new functions and improvements/fixes existing ones:
+#              . Add connect_with_info() (do_connect() + get_yb_ver_num() in one call). 
+#              . Fix is_manager() to silence the "which: no ybcli in ..." message 
+#              . Fix `which` prints to stderr when ybcli is not found.
 # 2026.07.17 - Implement is_appliance() as the inverse of is_cn(); both now
 #              check yb_ver_num first and short-circuit for versions <7.
 # 2026.07.17 - Add show_yb_env() to print YBHOST/YBUSER/YBDATABASE and a
@@ -24,9 +29,9 @@
 # NOTE: is_appliance() and is_cn() do not check for Yellowbrick Community
 # Edition.
 #
-# ???
-#. Do we want to use -X if not manager node becuase connection props might be
-#  set in ".ybsqlrc"
+# TODO:
+#. Use -X if not manager node because connection props might be set in ".ybsqlrc"
+#  
 
 ###############################################################################
 # CONNECTION FUNCTIONS
@@ -110,6 +115,37 @@ function do_connect()
 }
 
 
+function connect_with_info()
+#------------------------------------------------------------------------------
+# Attempt a ybsql connection (via do_connect()) and, on success, return the
+# yb_server_version_num (via get_yb_ver_num()).
+#
+# Args:
+#   $* (optl) - Optional args to pass to ybsql
+# Outputs:
+#   The "yb_server_version_num" property value if the connection succeeds.
+#   IF connection fails, YB* env variables (from do_connect()).
+# Return Code:
+#   0 if success, 1 if error
+# Affects:
+#   none
+#------------------------------------------------------------------------------
+{
+  local rc=0
+  local yb_ver_num="0"
+
+  do_connect $@
+  rc=$?
+  [[ ${rc} -ne 0 ]] && return ${rc}
+
+  yb_ver_num=$(get_yb_ver_num $@)
+  rc=$?
+  echo ${yb_ver_num}
+
+  return ${rc}
+}
+
+
 function is_appliance()
 #------------------------------------------------------------------------------
 # Is the cluster we are connecting to a Yellowbrick appliance (as opposed to
@@ -161,7 +197,7 @@ function is_manager()
 #   none
 #------------------------------------------------------------------------------
 {
-  local ybcli_path="$(which ybcli)"
+  local ybcli_path="$(which ybcli 2>/dev/null)"
 
   # If ybcli is found in the path this is assumed to be an appliance manager node.
   if [ -n "${ybcli_path}" ]
